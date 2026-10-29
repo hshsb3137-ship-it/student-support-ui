@@ -1,0 +1,36 @@
+import { useEffect } from "react";
+import { Outlet, useNavigate } from "@tanstack/react-router";
+import { useAuth, ROLE_HOME } from "@/lib/auth";
+import { AppShell } from "./AppShell";
+import type { Role } from "@/lib/types";
+
+export function RoleLayout({ role }: { role: Role }) {
+  const { user, ready } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!user) {
+      navigate({ to: "/login", replace: true });
+    } else if (user.role !== role) {
+      navigate({ to: ROLE_HOME[user.role], replace: true });
+    }
+  }, [ready, user, role, navigate]);
+
+  if (!ready || !user || user.role !== role) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          Preparing your workspace…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AppShell role={role}>
+      <Outlet />
+    </AppShell>
+  );
+}

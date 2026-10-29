@@ -1,0 +1,3 @@
+- [x] Complete and verify Admin module pages, navigation, interactive workflows, filters, and exports.
+- [x] Resolve any shared preview/build errors without changing Student or Department Staff modules.
+- [x] Complete GFM module pages (accepted, info-requests, rejected, notifications, profile) and route wiring.
