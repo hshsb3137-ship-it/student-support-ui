@@ -1,5 +1,20 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { grievances as seed, CURRENT_STUDENT } from "@/lib/mock-data";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { CURRENT_STUDENT } from "@/lib/mock-data";
+import {
+  addGrievanceToSharedStore,
+  addNotificationToSharedStore,
+  getSharedGrievances,
+  subscribeToSharedStore,
+  updateGrievanceInSharedStore,
+} from "@/lib/shared-grievance-store";
 import type { DepartmentName, Grievance, Priority, TimelineEntry } from "@/lib/types";
 
 export interface NewGrievanceInput {
@@ -29,11 +44,17 @@ function today() {
 }
 
 function entry(label: string, actor: string, note: string): TimelineEntry {
-  return { id: `t-${Math.random().toString(36).slice(2, 9)}`, label, actor, note, date: today() };
+  return { id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, label, actor, note, date: today() };
 }
 
 export function StudentDataProvider({ children }: { children: ReactNode }) {
-  const [all, setAll] = useState<Grievance[]>(seed);
+  const [all, setAll] = useState<Grievance[]>(getSharedGrievances);
+
+  useEffect(() => {
+    return subscribeToSharedStore(() => {
+      setAll([...getSharedGrievances()]);
+    });
+  }, []);
 
   const addGrievance = useCallback((input: NewGrievanceInput) => {
     const created: Grievance = {
@@ -58,78 +79,97 @@ export function StudentDataProvider({ children }: { children: ReactNode }) {
         ),
       ],
     };
-    setAll((prev) => [created, ...prev]);
+    addGrievanceToSharedStore(created);
     return created;
   }, []);
 
-  const update = useCallback((id: string, fn: (g: Grievance) => Grievance) => {
-    setAll((prev) => prev.map((g) => (g.id === id ? fn(g) : g)));
+  const withdrawGrievance = useCallback((id: string) => {
+    updateGrievanceInSharedStore(id, (g) => ({
+      ...g,
+      status: "Rejected",
+      updatedAt: today(),
+      timeline: [
+        ...g.timeline,
+        entry("Withdrawn", g.submittedBy, "The student withdrew this grievance."),
+      ],
+    }));
   }, []);
 
-  const withdrawGrievance = useCallback(
-    (id: string) =>
-      update(id, (g) => ({
-        ...g,
-        status: "Rejected",
-        updatedAt: today(),
-        timeline: [
-          ...g.timeline,
-          entry("Withdrawn", g.submittedBy, "The student withdrew this grievance."),
-        ],
-      })),
-    [update],
-  );
+  const reopenGrievance = useCallback((id: string, reason: string) => {
+    updateGrievanceInSharedStore(id, (g) => ({
+      ...g,
+      status: "GFM_REVIEW",
+      updatedAt: today(),
+      timeline: [
+        ...g.timeline,
+        entry("Reopened", g.submittedBy, reason || "The student reopened this grievance."),
+        entry("Pending GFM Review", "System", "Awaiting GFM triage after reopening."),
+      ],
+    }));
+  }, []);
 
-  const reopenGrievance = useCallback(
-    (id: string, reason: string) =>
-      update(id, (g) => ({
-        ...g,
-        status: "Under Review",
-        updatedAt: today(),
-        timeline: [
-          ...g.timeline,
-          entry("Reopened", g.submittedBy, reason || "The student reopened this grievance."),
-        ],
-      })),
-    [update],
-  );
+  const addFeedback = useCallback((id: string, rating: number, comment: string) => {
+    updateGrievanceInSharedStore(id, (g) => ({
+      ...g,
+      updatedAt: today(),
+      feedback: { rating, comment, date: today() },
+      timeline: [
+        ...g.timeline,
+        entry("Feedback received", g.submittedBy, `Rated ${rating}/5. ${comment}`.trim()),
+      ],
+    }));
+  }, []);
 
-  const addFeedback = useCallback(
-    (id: string, rating: number, comment: string) =>
-      update(id, (g) => ({
-        ...g,
-        updatedAt: today(),
-        feedback: { rating, comment, date: today() },
-        timeline: [
-          ...g.timeline,
-          entry("Feedback received", g.submittedBy, `Rated ${rating}/5. ${comment}`.trim()),
-        ],
-      })),
-    [update],
-  );
+  const submitInfo = useCallback((id: string, info: string) => {
+    updateGrievanceInSharedStore(id, (g) => {
+      const isGFMStage = g.status === "GFM_INFORMATION_REQUESTED";
+      const nextStatus = isGFMStage ? "GFM_REVIEW" : "STAFF_REVIEW";
+      const timelineEntries = [
+        ...g.timeline,
+        entry(
+          "Information Provided",
+          g.submittedBy,
+          info || "The student provided the requested information.",
+        ),
+      ];
 
-  const submitInfo = useCallback(
-    (id: string, info: string) =>
-      update(id, (g) => ({
-        ...g,
-        status: "GFM_REVIEW",
-        updatedAt: today(),
-        timeline: [
-          ...g.timeline,
-          entry(
-            "Information Submitted",
-            g.submittedBy,
-            info || "The student submitted the requested information.",
-          ),
+      if (isGFMStage) {
+        timelineEntries.push(
           entry(
             "Pending GFM Review",
             "System",
             "Grievance returned to GFM queue for review of the submitted information.",
           ),
-        ],
-      })),
-    [update],
-  );
+        );
+      } else {
+        timelineEntries.push(
+          entry(
+            "Staff Review Started",
+            "System",
+            "Grievance returned to department staff for further review.",
+          ),
+        );
+      }
+
+      // Add notification for GFM or department staff
+      addNotificationToSharedStore({
+        id: `notif-info-res-${Date.now()}`,
+        title: "Information Provided by Student",
+        message: `${g.submittedBy} submitted the requested information for ${g.id}.`,
+        date: new Date().toISOString().slice(0, 16).replace("T", " "),
+        read: false,
+        tone: "info",
+        audience: isGFMStage ? ["gfm", "admin"] : ["department", "admin"],
+      });
+
+      return {
+        ...g,
+        status: nextStatus,
+        updatedAt: today(),
+        timeline: timelineEntries,
+      };
+    });
+  }, []);
 
   const value = useMemo<StudentStore>(
     () => ({

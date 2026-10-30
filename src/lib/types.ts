@@ -6,7 +6,19 @@ export type Role = "student" | "gfm" | "department" | "admin";
  * After DEPARTMENT_ASSIGNED, department staff drive the remaining statuses.
  */
 export const GRIEVANCE_STATUSES = [
-  // Legacy / department statuses kept for backward compat
+  // Canonical uppercase statuses
+  "SUBMITTED",
+  "GFM_REVIEW",
+  "GFM_ACCEPTED",
+  "GFM_INFORMATION_REQUESTED",
+  "GFM_REJECTED",
+  "DEPARTMENT_ASSIGNED",
+  "STAFF_REVIEW",
+  "IN_PROGRESS",
+  "INFORMATION_REQUESTED",
+  "RESOLVED",
+  "ESCALATED",
+  // Legacy / titlecase statuses kept for backward compatibility
   "Submitted",
   "Acknowledged",
   "Under Review",
@@ -16,14 +28,6 @@ export const GRIEVANCE_STATUSES = [
   "Resolved",
   "Rejected",
   "Escalated",
-  // GFM workflow statuses
-  "GFM_REVIEW",
-  "GFM_ACCEPTED",
-  "GFM_INFORMATION_REQUESTED",
-  "GFM_REJECTED",
-  "DEPARTMENT_ASSIGNED",
-  "STAFF_REVIEW",
-  "INFORMATION_REQUESTED",
   "ESCALATED_TO_ADMIN",
 ] as const;
 
@@ -31,6 +35,18 @@ export type GrievanceStatus = (typeof GRIEVANCE_STATUSES)[number];
 
 /** Human-readable labels for all statuses */
 export const STATUS_LABELS: Record<GrievanceStatus, string> = {
+  SUBMITTED: "Submitted",
+  GFM_REVIEW: "Pending GFM Review",
+  GFM_ACCEPTED: "GFM Accepted",
+  GFM_INFORMATION_REQUESTED: "Information Requested",
+  GFM_REJECTED: "Rejected by GFM",
+  DEPARTMENT_ASSIGNED: "Department Assigned",
+  STAFF_REVIEW: "Staff Review",
+  IN_PROGRESS: "In Progress",
+  INFORMATION_REQUESTED: "Information Requested",
+  RESOLVED: "Resolved",
+  ESCALATED: "Escalated",
+  // Legacy / titlecase mappings
   Submitted: "Submitted",
   Acknowledged: "Acknowledged",
   "Under Review": "Under Review",
@@ -40,13 +56,6 @@ export const STATUS_LABELS: Record<GrievanceStatus, string> = {
   Resolved: "Resolved",
   Rejected: "Rejected",
   Escalated: "Escalated",
-  GFM_REVIEW: "Pending GFM Review",
-  GFM_ACCEPTED: "GFM Accepted",
-  GFM_INFORMATION_REQUESTED: "Information Requested",
-  GFM_REJECTED: "Rejected by GFM",
-  DEPARTMENT_ASSIGNED: "Department Assigned",
-  STAFF_REVIEW: "Staff Review",
-  INFORMATION_REQUESTED: "Information Requested",
   ESCALATED_TO_ADMIN: "Escalated to Admin",
 };
 

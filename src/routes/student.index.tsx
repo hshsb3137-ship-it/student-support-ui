@@ -39,7 +39,37 @@ export const Route = createFileRoute("/student/")({
 function StudentDashboard() {
   const { user } = useAuth();
   const { mine } = useStudentData();
-  const count = (status: string) => mine.filter((g) => g.status === status).length;
+
+  const ownCount = mine.length;
+  const pendingCount = mine.filter(
+    (g) =>
+      g.status === "GFM_REVIEW" ||
+      g.status === "Submitted" ||
+      g.status === "SUBMITTED" ||
+      g.status === "GFM_INFORMATION_REQUESTED" ||
+      g.status === "DEPARTMENT_ASSIGNED" ||
+      g.status === "STAFF_REVIEW" ||
+      g.status === "Under Review" ||
+      g.status === "Acknowledged",
+  ).length;
+  const inProgressCount = mine.filter(
+    (g) =>
+      g.status === "In Progress" ||
+      g.status === "IN_PROGRESS" ||
+      g.status === "Waiting for Student" ||
+      g.status === "INFORMATION_REQUESTED" ||
+      g.status === "Resolution Proposed",
+  ).length;
+  const resolvedCount = mine.filter(
+    (g) => g.status === "Resolved" || g.status === "RESOLVED",
+  ).length;
+  const escalatedCount = mine.filter(
+    (g) =>
+      g.status === "Escalated" ||
+      g.status === "ESCALATED" ||
+      g.status === "ESCALATED_TO_ADMIN",
+  ).length;
+
   const feed = notifications.filter((n) => n.audience.includes("student")).slice(0, 4);
 
   return (
@@ -65,20 +95,19 @@ function StudentDashboard() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <DashboardCard label="Total grievances" value={mine.length} icon={ClipboardList} />
-        <DashboardCard label="Submitted" value={count("Submitted")} icon={Inbox} />
-        <DashboardCard label="Under review" value={count("Under Review")} icon={Clock} tone="info" />
-        <DashboardCard label="In progress" value={count("In Progress")} icon={Loader2} tone="info" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <DashboardCard label="Own Grievances" value={ownCount} icon={ClipboardList} />
+        <DashboardCard label="Pending" value={pendingCount} icon={Clock} tone="warning" />
+        <DashboardCard label="In Progress" value={inProgressCount} icon={Loader2} tone="info" />
         <DashboardCard
           label="Resolved"
-          value={count("Resolved")}
+          value={resolvedCount}
           icon={CheckCircle2}
           tone="success"
         />
         <DashboardCard
           label="Escalated"
-          value={count("Escalated")}
+          value={escalatedCount}
           icon={ShieldAlert}
           tone="critical"
         />

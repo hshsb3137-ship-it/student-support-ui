@@ -63,22 +63,15 @@ function GFMDashboard() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <DashboardCard label="Total in queue" value={queue.length} icon={ClipboardList} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardCard
-          label="New Grievances"
+          label="Pending Review"
           value={pending}
           icon={Clock}
           tone="warning"
         />
         <DashboardCard
-          label="Information Requested"
-          value={infoReq}
-          icon={Info}
-          tone="info"
-        />
-        <DashboardCard
-          label="Accepted & Forwarded"
+          label="Accepted"
           value={accepted}
           icon={CheckCircle}
           tone="success"
@@ -88,6 +81,12 @@ function GFMDashboard() {
           value={rejected}
           icon={ShieldX}
           tone="critical"
+        />
+        <DashboardCard
+          label="Information Requested"
+          value={infoReq}
+          icon={Info}
+          tone="info"
         />
       </div>
 
@@ -139,7 +138,7 @@ function GFMDashboard() {
                       </td>
                       <td className="px-4 py-3">
                         <Button asChild variant="ghost" size="sm">
-                          <Link to={`/gfm/${g.id}`}>Review</Link>
+                          <Link to="/gfm/$grievanceId" params={{ grievanceId: g.id }}>Review</Link>
                         </Button>
                       </td>
                     </tr>

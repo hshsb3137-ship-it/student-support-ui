@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  AlertCircle,
   CheckCircle,
   Download,
   Eye,
-  History,
+  FilterX,
   MessageSquare,
+  Search,
   ShieldAlert,
-  UserCheck,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -49,14 +48,14 @@ export const Route = createFileRoute("/admin/escalations")({
   component: EscalationsPage,
 });
 
-const ESCALATION_STATUS_OPTIONS: EscalationStatus[] = [
+const ESCALATION_STATUS_OPTIONS = [
   "Open",
   "Under Authority Review",
   "Action Required",
   "Returned to Department",
   "Resolved by Authority",
   "Closed",
-];
+] as const;
 
 const AUTHORITIES = [
   "Campus Registrar",
@@ -67,7 +66,7 @@ const AUTHORITIES = [
   "University Student Ombudsman",
 ];
 
-export function EscalationsPage() {
+function EscalationsPage() {
   const {
     escalations,
     assignEscalation,
@@ -76,9 +75,22 @@ export function EscalationsPage() {
     updateGrievanceStatus,
   } = useAdminData();
 
+  const [q, setQ] = useState("");
   const [pri, setPri] = useState("all");
   const [dept, setDept] = useState("all");
   const [status, setStatus] = useState("all");
+  const [assignedFilter, setAssignedFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  // Handlers and authority bodies represented in escalations
+  const assignedList = Array.from(
+    new Set(
+      escalations
+        .map((e) => e.assignedOfficer || e.escalatedTo)
+        .filter(Boolean),
+    ),
+  ).sort() as string[];
 
   // Selected item for viewing & detail modal
   const [activeEscalation, setActiveEscalation] = useState<AdminEscalation | null>(null);
@@ -86,7 +98,7 @@ export function EscalationsPage() {
 
   // Assign officer state
   const [assigningEsc, setAssigningEsc] = useState<AdminEscalation | null>(null);
-  const [selectedOfficer, setSelectedOfficer] = useState(AUTHORITIES[0]);
+  const [selectedOfficer, setSelectedOfficer] = useState<string>(AUTHORITIES[0] ?? "");
 
   // Confirmation dialog state
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -94,8 +106,8 @@ export function EscalationsPage() {
     title: string;
     description: string;
     action: () => void;
-    destructive?: boolean;
-    confirmLabel?: string;
+    destructive?: boolean | undefined;
+    confirmLabel?: string | undefined;
   }>({
     open: false,
     title: "",
@@ -103,12 +115,61 @@ export function EscalationsPage() {
     action: () => {},
   });
 
-  const rows = escalations.filter(
-    (e) =>
-      (pri === "all" || e.priority === pri) &&
-      (dept === "all" || e.fromDepartment === dept) &&
-      (status === "all" || e.status === status),
+  const hasActiveFilters = Boolean(
+    q ||
+      pri !== "all" ||
+      dept !== "all" ||
+      status !== "all" ||
+      assignedFilter !== "all" ||
+      fromDate ||
+      toDate,
   );
+
+  function resetFilters() {
+    setQ("");
+    setPri("all");
+    setDept("all");
+    setStatus("all");
+    setAssignedFilter("all");
+    setFromDate("");
+    setToDate("");
+  }
+
+  const rows = escalations.filter((e) => {
+    const term = q.trim().toLowerCase();
+    if (
+      term &&
+      !(
+        e.id.toLowerCase().includes(term) ||
+        e.grievanceId.toLowerCase().includes(term) ||
+        e.reason.toLowerCase().includes(term) ||
+        e.fromDepartment.toLowerCase().includes(term) ||
+        e.escalatedTo.toLowerCase().includes(term) ||
+        (e.assignedOfficer && e.assignedOfficer.toLowerCase().includes(term))
+      )
+    ) {
+      return false;
+    }
+
+    if (pri !== "all" && e.priority !== pri) return false;
+    if (dept !== "all" && e.fromDepartment !== dept) return false;
+    if (status !== "all" && e.status !== status) return false;
+
+    if (assignedFilter === "unassigned") {
+      if (e.assignedOfficer) return false;
+    } else if (
+      assignedFilter !== "all" &&
+      e.assignedOfficer !== assignedFilter &&
+      e.escalatedTo !== assignedFilter
+    ) {
+      return false;
+    }
+
+    if (fromDate && e.date < fromDate) return false;
+    if (toDate && e.date > toDate) return false;
+
+    return true;
+  });
 
   function triggerStatusChange(
     e: AdminEscalation,
@@ -173,28 +234,94 @@ export function EscalationsPage() {
         }
       />
 
-      <div className="surface-card mb-4 flex flex-wrap gap-2.5 p-3">
-        <NativeSelect
-          aria-label="Priority"
-          value={pri}
-          onChange={(e) => setPri(e.target.value)}
-          options={PRIORITIES}
-          allLabel="All priorities"
-        />
-        <NativeSelect
-          aria-label="Department"
-          value={dept}
-          onChange={(e) => setDept(e.target.value)}
-          options={DEPARTMENTS}
-          allLabel="All departments"
-        />
-        <NativeSelect
-          aria-label="Escalation status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          options={ESCALATION_STATUS_OPTIONS}
-          allLabel="All statuses"
-        />
+      <div className="surface-card mb-4 p-3.5 space-y-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search escalation #, grievance #, reason, authority…"
+              className="pl-8 h-9 text-xs"
+            />
+          </div>
+
+          <NativeSelect
+            aria-label="Escalation status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            options={ESCALATION_STATUS_OPTIONS}
+            allLabel="All escalation statuses"
+          />
+
+          <NativeSelect
+            aria-label="Department"
+            value={dept}
+            onChange={(e) => setDept(e.target.value)}
+            options={DEPARTMENTS}
+            allLabel="All departments"
+          />
+
+          <NativeSelect
+            aria-label="Priority"
+            value={pri}
+            onChange={(e) => setPri(e.target.value)}
+            options={PRIORITIES}
+            allLabel="All priorities"
+          />
+
+          {/* Assigned Authority or Officer */}
+          <select
+            className="h-9 rounded-md border border-input bg-background px-3 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={assignedFilter}
+            onChange={(e) => setAssignedFilter(e.target.value)}
+            aria-label="Assigned Handler"
+          >
+            <option value="all">All assigned authorities</option>
+            <option value="unassigned">Unassigned Officer</option>
+            {assignedList.map((handler) => (
+              <option key={handler} value={handler}>
+                {handler}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date Range Sub-Bar */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
+          <span className="font-medium">Escalation Date:</span>
+          <Input
+            type="date"
+            className="h-8 w-36 text-xs"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            aria-label="From Date"
+          />
+          <span>to</span>
+          <Input
+            type="date"
+            className="h-8 w-36 text-xs"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            aria-label="To Date"
+          />
+
+          {hasActiveFilters && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground ml-auto sm:ml-0"
+              onClick={resetFilters}
+            >
+              <FilterX className="mr-1 size-3.5" />
+              Reset filters
+            </Button>
+          )}
+
+          <span className="ml-auto text-xs text-muted-foreground font-medium">
+            Showing {rows.length} of {escalations.length} escalation{escalations.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -282,7 +409,7 @@ export function EscalationsPage() {
                         className="text-xs"
                         onClick={() => {
                           setAssigningEsc(e);
-                          setSelectedOfficer(e.assignedOfficer || AUTHORITIES[0]);
+                          setSelectedOfficer(e.assignedOfficer || AUTHORITIES[0] || "");
                         }}
                       >
                         Assign
@@ -301,7 +428,7 @@ export function EscalationsPage() {
         open={!!activeEscalation}
         onOpenChange={(o) => !o && setActiveEscalation(null)}
         title={activeEscalation ? `Escalation ${activeEscalation.id} (${activeEscalation.grievanceId})` : ""}
-        description={activeEscalation?.reason}
+        description={activeEscalation?.reason ?? undefined}
         footer={
           <div className="flex w-full items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
@@ -440,7 +567,7 @@ export function EscalationsPage() {
                           history: [
                             ...prev.history,
                             {
-                              id: crypto.randomUUID(),
+                              id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `h-${Date.now()}`,
                               date: new Date().toISOString().slice(0, 10),
                               actor: "Dr. Anjali Kamat (Admin)",
                               note: note.trim(),
@@ -466,7 +593,7 @@ export function EscalationsPage() {
         open={!!assigningEsc}
         onOpenChange={(o) => !o && setAssigningEsc(null)}
         title="Assign Escalated Case to Authority"
-        description={`Allocate an administrative officer to take ownership of case ${assigningEsc?.id} (${assigningEsc?.grievanceId}).`}
+        description={`Allocate an administrative officer to take ownership of case ${assigningEsc?.id ?? ""} (${assigningEsc?.grievanceId ?? ""}).`}
         footer={
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setAssigningEsc(null)}>
@@ -501,8 +628,8 @@ export function EscalationsPage() {
         onOpenChange={(open) => setConfirmConfig((prev) => ({ ...prev, open }))}
         title={confirmConfig.title}
         description={confirmConfig.description}
-        confirmLabel={confirmConfig.confirmLabel}
-        destructive={confirmConfig.destructive}
+        confirmLabel={confirmConfig.confirmLabel ?? "Confirm"}
+        destructive={confirmConfig.destructive ?? false}
         onConfirm={confirmConfig.action}
       />
     </>

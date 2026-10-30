@@ -37,10 +37,25 @@ export const ROLE_HOME: Record<Role, string> = {
   admin: "/admin",
 };
 
+export const DEMO_EMAILS: Record<Role, string> = {
+  student: "nishant.bendale@university.edu",
+  gfm: "gfm@university.edu",
+  department: "s.balachandran@university.edu",
+  admin: "registrar@university.edu",
+};
+
+export const ROLE_LABELS: Record<Role, string> = {
+  student: "Student",
+  gfm: "GFM",
+  department: "Department Staff",
+  admin: "Admin",
+};
+
 interface AuthContextValue {
   user: SessionUser | null;
   ready: boolean;
   login: (email: string, password: string, role: Role) => SessionUser;
+  switchRole: (role: Role) => SessionUser;
   logout: () => void;
 }
 
@@ -68,12 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const switchRole = useCallback(
+    (nextRole: Role) => login(DEMO_EMAILS[nextRole], "demo1234", nextRole),
+    [login],
+  );
+
   const logout = useCallback(() => {
     setUser(null);
     window.localStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  const value = useMemo(() => ({ user, ready, login, logout }), [user, ready, login, logout]);
+  const value = useMemo(
+    () => ({ user, ready, login, switchRole, logout }),
+    [user, ready, login, switchRole, logout],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

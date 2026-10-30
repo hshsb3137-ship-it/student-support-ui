@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -77,6 +77,7 @@ function GFMGrievanceReview() {
     setAcceptConfirmOpen(true);
   }
   function handleAcceptConfirm() {
+    if (!grievance) return;
     acceptAndForward(grievance.id, acceptDept as DepartmentName, acceptComments);
     toast.success("Grievance forwarded to " + acceptDept + " department.");
     navigate({ to: "/gfm" });
@@ -89,6 +90,7 @@ function GFMGrievanceReview() {
     setRejectErr(""); setRejectOpen(false); setRejectConfirmOpen(true);
   }
   function handleRejectConfirm() {
+    if (!grievance) return;
     reject(grievance.id, rejectReason.trim());
     toast.success("Grievance rejected and student notified.");
     navigate({ to: "/gfm" });
@@ -101,6 +103,7 @@ function GFMGrievanceReview() {
     setInfoErr(""); setInfoOpen(false); setInfoConfirmOpen(true);
   }
   function handleInfoConfirm() {
+    if (!grievance) return;
     requestInfo(grievance.id, infoMessage.trim(), infoDeadline || undefined);
     toast.success("Information request sent to student.");
     navigate({ to: "/gfm" });

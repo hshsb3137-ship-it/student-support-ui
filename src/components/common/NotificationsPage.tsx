@@ -1,15 +1,27 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BellOff, CheckCheck } from "lucide-react";
 import { PageHeader } from "./PageHeader";
 import { Notification } from "./Notification";
 import { EmptyState } from "./EmptyState";
 import { Button } from "@/components/ui/button";
-import { notifications as seed } from "@/lib/mock-data";
+import {
+  getSharedNotifications,
+  markAllNotificationsReadInSharedStore,
+  markNotificationReadInSharedStore,
+  subscribeToSharedStore,
+} from "@/lib/shared-grievance-store";
 import type { Role } from "@/lib/types";
 
 export function NotificationsPage({ role, crumbLabel }: { role: Role; crumbLabel: string }) {
-  const initial = useMemo(() => seed.filter((n) => n.audience.includes(role)), [role]);
-  const [items, setItems] = useState(initial);
+  const [allNotifs, setAllNotifs] = useState(getSharedNotifications);
+
+  useEffect(() => {
+    return subscribeToSharedStore(() => {
+      setAllNotifs([...getSharedNotifications()]);
+    });
+  }, []);
+
+  const items = useMemo(() => allNotifs.filter((n) => n.audience.includes(role)), [allNotifs, role]);
   const unread = items.filter((n) => !n.read).length;
 
   return (
@@ -25,7 +37,7 @@ export function NotificationsPage({ role, crumbLabel }: { role: Role; crumbLabel
             variant="outline"
             size="sm"
             disabled={unread === 0}
-            onClick={() => setItems((prev) => prev.map((n) => ({ ...n, read: true })))}
+            onClick={() => markAllNotificationsReadInSharedStore(role)}
           >
             <CheckCheck className="mr-2 size-4" />
             Mark all read
@@ -45,9 +57,7 @@ export function NotificationsPage({ role, crumbLabel }: { role: Role; crumbLabel
             <Notification
               key={n.id}
               notification={n}
-              onClick={() =>
-                setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
-              }
+              onClick={() => markNotificationReadInSharedStore(n.id)}
             />
           ))}
         </div>

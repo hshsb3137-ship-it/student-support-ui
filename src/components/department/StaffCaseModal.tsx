@@ -291,13 +291,15 @@ export function StaffCaseModal({
             <Button
               size="sm"
               variant="outline"
-              disabled={g.status !== "Submitted"}
+              disabled={g.status !== "DEPARTMENT_ASSIGNED" && g.status !== "Submitted"}
               onClick={() => {
                 store.acknowledge(g.id);
-                toast.success("Grievance accepted");
+                toast.success("Staff review commenced", {
+                  description: `${g.id} is now under active staff investigation.`,
+                });
               }}
             >
-              <CheckCircle2 className="mr-1.5 size-4" /> Accept
+              <CheckCircle2 className="mr-1.5 size-4" /> Start Review
             </Button>
             <Button size="sm" variant="outline" onClick={() => setSheet("status")}>
               <RefreshCw className="mr-1.5 size-4" /> Update status

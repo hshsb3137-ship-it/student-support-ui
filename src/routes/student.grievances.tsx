@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/grievances")({
 });
 
 function MyGrievances() {
-  const { mine, withdrawGrievance, reopenGrievance, addFeedback } = useStudentData();
+  const { mine, withdrawGrievance, reopenGrievance, addFeedback, submitInfo } = useStudentData();
 
   return (
     <GrievanceListPage
@@ -43,6 +43,12 @@ function MyGrievances() {
       onFeedback={(id, rating, comment) => {
         addFeedback(id, rating, comment);
         toast.success("Thanks for your feedback", { description: `${rating}/5 for ${id}` });
+      }}
+      onSubmitInfo={(id, info) => {
+        submitInfo(id, info);
+        toast.success("Information submitted to reviewer", {
+          description: `Case ${id} returned for review.`,
+        });
       }}
       emptyTitle="No grievances yet"
       emptyDescription="Submit a grievance and it will appear here."

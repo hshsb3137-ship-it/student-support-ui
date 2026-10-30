@@ -110,7 +110,7 @@ function GFMRejected() {
                     </td>
                     <td className="px-4 py-3">
                       <Button asChild variant="ghost" size="sm">
-                        <Link to={`/gfm/${g.id}`}>View</Link>
+                        <Link to="/gfm/$grievanceId" params={{ grievanceId: g.id }}>View</Link>
                       </Button>
                     </td>
                   </tr>

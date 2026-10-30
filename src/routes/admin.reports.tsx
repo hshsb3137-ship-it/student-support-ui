@@ -38,7 +38,7 @@ import {
   generateResolutionReportCSV,
   generateEscalationReportCSV,
 } from "@/lib/admin-data";
-import { DEPARTMENTS } from "@/lib/types";
+import { DEPARTMENTS, GRIEVANCE_STATUSES, STATUS_LABELS } from "@/lib/types";
 
 export const Route = createFileRoute("/admin/reports")({
   head: () => ({
@@ -61,6 +61,13 @@ function ReportsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [dept, setDept] = useState("all");
+  const [cat, setCat] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  const categories = useMemo(
+    () => Array.from(new Set(grievances.map((g) => g.category).filter(Boolean))).sort(),
+    [grievances],
+  );
 
   const list = useMemo(
     () =>
@@ -68,9 +75,11 @@ function ReportsPage() {
         (g) =>
           (!from || g.submittedAt >= from) &&
           (!to || g.submittedAt <= to) &&
-          (dept === "all" || g.department === dept),
+          (dept === "all" || g.department === dept) &&
+          (cat === "all" || g.category === cat) &&
+          (status === "all" || g.status === status),
       ),
-    [grievances, from, to, dept],
+    [grievances, from, to, dept, cat, status],
   );
 
   const s = computeStats(list);
@@ -268,6 +277,36 @@ function ReportsPage() {
             allLabel="All departments"
           />
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="r-cat" className="text-xs">
+            Category Scope
+          </Label>
+          <NativeSelect
+            id="r-cat"
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
+            options={categories}
+            allLabel="All categories"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="r-status" className="text-xs">
+            Status Scope
+          </Label>
+          <select
+            id="r-status"
+            className="h-9 rounded-md border border-input bg-background px-3 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            {GRIEVANCE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABELS[s] ?? s}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button
           size="sm"
           variant="ghost"
@@ -275,6 +314,8 @@ function ReportsPage() {
             setFrom("");
             setTo("");
             setDept("all");
+            setCat("all");
+            setStatus("all");
           }}
         >
           Reset Filters

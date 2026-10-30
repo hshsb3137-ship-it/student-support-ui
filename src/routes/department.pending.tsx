@@ -22,7 +22,15 @@ export const Route = createFileRoute("/department/pending")({
   component: PendingPage,
 });
 
-const CLOSED = ["Resolved", "Rejected", "Escalated"];
+const CLOSED = [
+  "Resolved",
+  "RESOLVED",
+  "Rejected",
+  "GFM_REJECTED",
+  "Escalated",
+  "ESCALATED",
+  "ESCALATED_TO_ADMIN",
+];
 
 function PendingPage() {
   const { cases } = useDepartmentData();
@@ -32,9 +40,9 @@ function PendingPage() {
     { title: "Overdue", tone: "border-critical", rows: open.filter((g) => slaDaysLeft(g) < 0) },
     { title: "Nearing SLA deadline", tone: "border-warning", rows: open.filter((g) => { const d = slaDaysLeft(g); return d >= 0 && d <= 2; }) },
     { title: "High priority", tone: "border-critical", rows: open.filter((g) => g.priority === "High" || g.priority === "Critical") },
-    { title: "New grievances", tone: "border-info", rows: open.filter((g) => g.status === "Submitted") },
-    { title: "Waiting for review", tone: "border-accent", rows: open.filter((g) => ["Acknowledged", "Under Review"].includes(g.status)) },
-    { title: "Waiting for response", tone: "border-primary", rows: open.filter((g) => ["Waiting for Student", "Resolution Proposed"].includes(g.status)) },
+    { title: "New assigned grievances", tone: "border-info", rows: open.filter((g) => g.status === "DEPARTMENT_ASSIGNED" || g.status === "Submitted" || g.status === "SUBMITTED") },
+    { title: "Waiting for review", tone: "border-accent", rows: open.filter((g) => ["Acknowledged", "Under Review", "STAFF_REVIEW"].includes(g.status)) },
+    { title: "Waiting for response", tone: "border-primary", rows: open.filter((g) => ["Waiting for Student", "INFORMATION_REQUESTED", "Resolution Proposed"].includes(g.status)) },
   ];
   const selected = cases.find((g) => g.id === selectedId);
 

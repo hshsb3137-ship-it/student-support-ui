@@ -1,13 +1,27 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   CURRENT_DEPARTMENT_STAFF,
   departmentActivity,
-  departmentNotificationSeed,
-  departmentSeed,
   seedEscalations,
 } from "./department-data";
-import { grievances as baseGrievances } from "./mock-data";
+import {
+  addEscalationToSharedStore,
+  addNotificationToSharedStore,
+  getSharedGrievances,
+  getSharedNotifications,
+  markAllNotificationsReadInSharedStore,
+  markNotificationReadInSharedStore,
+  subscribeToSharedStore,
+  updateGrievanceInSharedStore,
+} from "./shared-grievance-store";
 import type {
   ActivityEntry,
   AppNotification,
@@ -17,11 +31,8 @@ import type {
   TimelineEntry,
 } from "./types";
 
-const TODAY = "2026-09-15";
-
-function stamp() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
+const today = () => new Date().toISOString().slice(0, 10);
+const stamp = () => new Date().toISOString().slice(0, 16).replace("T", " ");
 
 interface DepartmentContextValue {
   department: string;
@@ -47,39 +58,57 @@ interface DepartmentContextValue {
 
 const Ctx = createContext<DepartmentContextValue | null>(null);
 
+/** Only statuses that appear after GFM forwards a grievance to a department */
+const DEPT_VISIBLE_STATUSES: GrievanceStatus[] = [
+  "DEPARTMENT_ASSIGNED",
+  "STAFF_REVIEW",
+  "Acknowledged",
+  "Under Review",
+  "In Progress",
+  "IN_PROGRESS",
+  "Waiting for Student",
+  "Resolution Proposed",
+  "Resolved",
+  "RESOLVED",
+  "Rejected",
+  "Escalated",
+  "ESCALATED",
+  "INFORMATION_REQUESTED",
+  "ESCALATED_TO_ADMIN",
+];
+
+const GFM_EXCLUDED_STATUSES = new Set([
+  "GFM_REVIEW",
+  "GFM_REJECTED",
+  "GFM_INFORMATION_REQUESTED",
+  "SUBMITTED",
+  "Submitted",
+]);
+
 export function DepartmentDataProvider({ children }: { children: ReactNode }) {
   const staff = CURRENT_DEPARTMENT_STAFF;
 
-  /** Only statuses that appear after GFM forwards a grievance to a department */
-  const DEPT_VISIBLE_STATUSES: GrievanceStatus[] = [
-    "DEPARTMENT_ASSIGNED",
-    "STAFF_REVIEW",
-    "Acknowledged",
-    "Under Review",
-    "In Progress",
-    "Waiting for Student",
-    "Resolution Proposed",
-    "Resolved",
-    "Rejected",
-    "Escalated",
-    "INFORMATION_REQUESTED",
-    "ESCALATED_TO_ADMIN",
-  ];
-
-  const [cases, setCases] = useState<Grievance[]>(() =>
-    [...departmentSeed, ...baseGrievances]
-      .filter((g) => g.department === staff.department)
-      .filter(
-        (g) =>
-          DEPT_VISIBLE_STATUSES.includes(g.status) ||
-          g.assignedDepartment === staff.department,
-      ),
-  );
+  const [allGrievances, setAllGrievances] = useState<Grievance[]>(getSharedGrievances);
+  const [notifications, setNotifications] = useState<AppNotification[]>(getSharedNotifications);
   const [escalations, setEscalations] = useState<Escalation[]>(seedEscalations);
   const [activity, setActivity] = useState<ActivityEntry[]>(departmentActivity);
-  const [notifications, setNotifications] = useState<AppNotification[]>(
-    departmentNotificationSeed,
-  );
+
+  useEffect(() => {
+    return subscribeToSharedStore(() => {
+      setAllGrievances([...getSharedGrievances()]);
+      setNotifications([...getSharedNotifications()]);
+    });
+  }, []);
+
+  const cases = useMemo(() => {
+    return allGrievances.filter((g) => {
+      const isMyDept =
+        g.department === staff.department || g.assignedDepartment === staff.department;
+      if (!isMyDept) return false;
+      if (GFM_EXCLUDED_STATUSES.has(g.status)) return false;
+      return DEPT_VISIBLE_STATUSES.includes(g.status);
+    });
+  }, [allGrievances, staff.department]);
 
   const log = useCallback((label: string, detail: string, tone: ActivityEntry["tone"]) => {
     setActivity((prev) => [
@@ -90,22 +119,17 @@ export function DepartmentDataProvider({ children }: { children: ReactNode }) {
 
   const apply = useCallback(
     (id: string, status: GrievanceStatus, entry: Omit<TimelineEntry, "id" | "date">) => {
-      setCases((prev) =>
-        prev.map((g) =>
-          g.id === id
-            ? {
-                ...g,
-                status,
-                assignedTo: g.assignedTo ?? staff.name,
-                updatedAt: TODAY,
-                timeline: [
-                  ...g.timeline,
-                  { ...entry, id: `t-${Date.now()}`, date: TODAY },
-                ],
-              }
-            : g,
-        ),
-      );
+      const d = today();
+      updateGrievanceInSharedStore(id, (g) => ({
+        ...g,
+        status,
+        assignedTo: g.assignedTo ?? staff.name,
+        updatedAt: d,
+        timeline: [
+          ...g.timeline,
+          { ...entry, id: `t-${Date.now()}`, date: d },
+        ],
+      }));
     },
     [staff.name],
   );
@@ -117,16 +141,28 @@ export function DepartmentDataProvider({ children }: { children: ReactNode }) {
       cases,
       escalations,
       activity,
-      notifications,
-      findById: (id) => cases.find((g) => g.id === id),
+      notifications: notifications.filter((n) => n.audience.includes("department")),
+      findById: (id) => cases.find((g) => g.id.toLowerCase() === id.trim().toLowerCase()),
+
       acknowledge: (id) => {
-        apply(id, "Acknowledged", {
-          label: "Acknowledged",
+        apply(id, "STAFF_REVIEW", {
+          label: "Staff Review Started",
           actor: staff.name,
-          note: "Case accepted by the department desk.",
+          note: `Investigation initiated by ${staff.name} (${staff.designation}).`,
         });
-        log("Grievance acknowledged", `${id} accepted by ${staff.name}`, "info");
+        log("Grievance Review Commenced", `${id} under review by ${staff.name}`, "info");
+
+        addNotificationToSharedStore({
+          id: `notif-staff-start-${Date.now()}`,
+          title: "Staff Review Started",
+          message: `${staff.name} (${staff.department}) commenced review on grievance ${id}.`,
+          date: stamp(),
+          read: false,
+          tone: "info",
+          audience: ["student", "department", "admin"],
+        });
       },
+
       updateStatus: (id, status, comment) => {
         apply(id, status, {
           label: status,
@@ -135,62 +171,112 @@ export function DepartmentDataProvider({ children }: { children: ReactNode }) {
         });
         log("Status updated", `${id} moved to ${status}`, "warning");
       },
+
       requestInformation: (id, required, message) => {
-        apply(id, "Waiting for Student", {
-          label: "Information requested",
+        apply(id, "INFORMATION_REQUESTED", {
+          label: "Information Requested",
           actor: staff.name,
           note: `${required} — ${message}`,
         });
         log("Information requested", `${id} · ${required}`, "warning");
+
+        addNotificationToSharedStore({
+          id: `notif-dept-info-${Date.now()}`,
+          title: "Department Information Request",
+          message: `The ${staff.department} department requested additional details for grievance ${id}: ${required}`,
+          date: stamp(),
+          read: false,
+          tone: "warning",
+          audience: ["student", "department", "admin"],
+        });
       },
+
       resolve: (id, summary, actionTaken, date) => {
-        setCases((prev) =>
-          prev.map((g) =>
-            g.id === id
-              ? {
-                  ...g,
-                  status: "Resolved" as GrievanceStatus,
-                  updatedAt: date,
-                  timeline: [
-                    ...g.timeline,
-                    {
-                      id: `t-${Date.now()}`,
-                      label: "Resolved",
-                      actor: staff.name,
-                      note: `${summary} · Action taken: ${actionTaken}`,
-                      date,
-                    },
-                  ],
-                }
-              : g,
-          ),
-        );
+        const d = date || today();
+        updateGrievanceInSharedStore(id, (g) => ({
+          ...g,
+          status: "RESOLVED",
+          updatedAt: d,
+          timeline: [
+            ...g.timeline,
+            {
+              id: `t-${Date.now()}`,
+              label: "Resolved",
+              actor: staff.name,
+              note: `${summary} · Action taken: ${actionTaken}`,
+              date: d,
+            },
+          ],
+        }));
+
         log("Grievance resolved", `${id} marked resolved — student notified`, "success");
+
+        addNotificationToSharedStore({
+          id: `notif-res-${Date.now()}`,
+          title: "Grievance Resolved",
+          message: `Your grievance ${id} has been resolved by the ${staff.department} department.`,
+          date: stamp(),
+          read: false,
+          tone: "success",
+          audience: ["student", "department", "admin"],
+        });
       },
+
       escalate: (id, reason, escalatedTo, comments) => {
-        apply(id, "Escalated", {
+        const d = today();
+        apply(id, "ESCALATED", {
           label: "Escalated",
           actor: staff.name,
           note: `${reason} — escalated to ${escalatedTo}.`,
         });
-        setEscalations((prev) => [
-          {
-            id: `e-${Date.now()}`,
-            grievanceId: id,
-            reason,
-            escalatedTo,
-            comments,
-            date: TODAY,
-            by: staff.name,
-          },
-          ...prev,
-        ]);
+
+        const esc: Escalation = {
+          id: `e-${Date.now()}`,
+          grievanceId: id,
+          reason,
+          escalatedTo,
+          comments,
+          date: d,
+          by: staff.name,
+        };
+        setEscalations((prev) => [esc, ...prev]);
+
+        // Also add to shared escalations for Admin
+        addEscalationToSharedStore({
+          id: `ESC-${Date.now().toString().slice(-4)}`,
+          grievanceId: id,
+          fromDepartment: staff.department,
+          escalatedTo,
+          ...(escalatedTo === "Administrator" ? { assignedOfficer: "Campus Registrar" } : {}),
+          reason,
+          priority: "High",
+          date: d,
+          status: "Under Authority Review",
+          history: [
+            {
+              id: `h-${Date.now()}`,
+              date: d,
+              actor: staff.name,
+              note: `Escalated to ${escalatedTo}: ${reason}. ${comments || ""}`.trim(),
+            },
+          ],
+        });
+
         log("Case escalated", `${id} escalated to ${escalatedTo}`, "critical");
+
+        addNotificationToSharedStore({
+          id: `notif-esc-${Date.now()}`,
+          title: "Grievance Escalated",
+          message: `Grievance ${id} was escalated to ${escalatedTo} by ${staff.name}.`,
+          date: stamp(),
+          read: false,
+          tone: "critical",
+          audience: ["student", "department", "admin"],
+        });
       },
-      markNotificationRead: (id) =>
-        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n))),
-      markAllNotificationsRead: () =>
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
+
+      markNotificationRead: (id) => markNotificationReadInSharedStore(id),
+      markAllNotificationsRead: () => markAllNotificationsReadInSharedStore("department"),
     }),
     [staff, cases, escalations, activity, notifications, apply, log],
   );

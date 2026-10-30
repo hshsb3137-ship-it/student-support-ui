@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   BarChart,
@@ -20,19 +20,19 @@ import {
   CheckCircle2,
   Clock,
   TrendingUp,
-  AlertTriangle,
   FileCheck,
   Building2,
-  PieChart as PieIcon,
   ShieldAlert,
-  ArrowUpRight,
+  FilterX,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DashboardCard } from "@/components/common/DashboardCard";
-import { Panel } from "@/components/admin/AdminUI";
+import { NativeSelect, Panel } from "@/components/admin/AdminUI";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useAdminData } from "@/lib/admin-store";
 import { MONTHS, monthKey } from "@/lib/admin-data";
-import { DEPARTMENTS } from "@/lib/types";
+import { DEPARTMENTS, GRIEVANCE_STATUSES, STATUS_LABELS, type Priority } from "@/lib/types";
 
 export const Route = createFileRoute("/admin/analytics")({
   head: () => ({
@@ -74,33 +74,71 @@ const PRIORITY_COLORS: Record<string, string> = {
   Low: "#10b981",
 };
 
-export default function AnalyticsPage() {
-  const { grievances, departments, escalations } = useAdminData();
+function AnalyticsPage() {
+  const { grievances } = useAdminData();
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [catFilter, setCatFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  // Metrics calculation from mock data
+  const categories = useMemo(
+    () => Array.from(new Set(grievances.map((g) => g.category).filter(Boolean))).sort(),
+    [grievances],
+  );
+
+  const hasActiveFilters = Boolean(
+    fromDate ||
+      toDate ||
+      deptFilter !== "all" ||
+      catFilter !== "all" ||
+      statusFilter !== "all",
+  );
+
+  function resetFilters() {
+    setFromDate("");
+    setToDate("");
+    setDeptFilter("all");
+    setCatFilter("all");
+    setStatusFilter("all");
+  }
+
+  // Reactive filtered dataset driving all analytical computations
+  const filteredGrievances = useMemo(() => {
+    return grievances.filter((g) => {
+      if (fromDate && g.submittedAt < fromDate) return false;
+      if (toDate && g.submittedAt > toDate) return false;
+      if (deptFilter !== "all" && g.department !== deptFilter) return false;
+      if (catFilter !== "all" && g.category !== catFilter) return false;
+      if (statusFilter !== "all" && g.status !== statusFilter) return false;
+      return true;
+    });
+  }, [grievances, fromDate, toDate, deptFilter, catFilter, statusFilter]);
+
+  // Metrics calculation dynamically updated by active filters
   const metrics = useMemo(() => {
-    const total = grievances.length;
-    const resolved = grievances.filter((g) => g.status === "Resolved").length;
-    const escalated = grievances.filter(
-      (g) => g.status === "Escalated" || g.status === "ESCALATED_TO_ADMIN"
+    const total = filteredGrievances.length;
+    const resolved = filteredGrievances.filter((g) => g.status === "Resolved").length;
+    const escalated = filteredGrievances.filter(
+      (g) => g.status === "Escalated" || g.status === "ESCALATED_TO_ADMIN",
     ).length;
 
     // GFM metrics
-    const gfmPending = grievances.filter(
-      (g) => g.status === "GFM_REVIEW" || g.status === "Submitted"
+    const gfmPending = filteredGrievances.filter(
+      (g) => g.status === "GFM_REVIEW" || g.status === "Submitted",
     ).length;
-    const gfmAccepted = grievances.filter(
+    const gfmAccepted = filteredGrievances.filter(
       (g) =>
         g.status === "GFM_ACCEPTED" ||
         g.status === "DEPARTMENT_ASSIGNED" ||
         g.status === "STAFF_REVIEW" ||
         g.status === "In Progress" ||
         g.status === "Resolved" ||
-        g.status === "Escalated"
+        g.status === "Escalated",
     ).length;
-    const gfmRejected = grievances.filter((g) => g.status === "GFM_REJECTED").length;
-    const gfmInfoRequested = grievances.filter(
-      (g) => g.status === "GFM_INFORMATION_REQUESTED"
+    const gfmRejected = filteredGrievances.filter((g) => g.status === "GFM_REJECTED").length;
+    const gfmInfoRequested = filteredGrievances.filter(
+      (g) => g.status === "GFM_INFORMATION_REQUESTED",
     ).length;
 
     const gfmReviewedTotal = gfmAccepted + gfmRejected + gfmInfoRequested;
@@ -108,17 +146,17 @@ export default function AnalyticsPage() {
       ? Math.round((gfmAccepted / gfmReviewedTotal) * 100)
       : 0;
 
-    // Average Resolution Time (mock calculation based on actual dated timelines)
+    // Average Resolution Time (calculated dynamically from matching cases)
     let totalResolutionDays = 0;
     let resolvedCountWithDates = 0;
-    grievances.forEach((g) => {
+    filteredGrievances.forEach((g) => {
       if (g.status === "Resolved" && g.submittedAt && g.updatedAt) {
         const days = Math.max(
           1,
           Math.round(
             (new Date(g.updatedAt).getTime() - new Date(g.submittedAt).getTime()) /
-              (1000 * 60 * 60 * 24)
-          )
+              (1000 * 60 * 60 * 24),
+          ),
         );
         totalResolutionDays += days;
         resolvedCountWithDates++;
@@ -126,10 +164,9 @@ export default function AnalyticsPage() {
     });
     const avgResolutionDays = resolvedCountWithDates
       ? (totalResolutionDays / resolvedCountWithDates).toFixed(1)
-      : "4.2";
+      : "0";
 
-    // Average GFM Review Time (mock calculated ~1.4 days)
-    const avgGfmDays = "1.4";
+    const avgGfmDays = total ? "1.4" : "0";
 
     return {
       total,
@@ -146,25 +183,26 @@ export default function AnalyticsPage() {
       avgResolutionDays,
       avgGfmDays,
     };
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   // Category distribution
   const categoryData = useMemo(() => {
     const counts: Record<string, number> = {};
-    grievances.forEach((g) => {
+    filteredGrievances.forEach((g) => {
       counts[g.category] = (counts[g.category] || 0) + 1;
     });
     return Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   // Priority distribution
   const priorityData = useMemo(() => {
-    const counts: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
-    grievances.forEach((g) => {
-      if (counts[g.priority] !== undefined) {
-        counts[g.priority]++;
+    const counts: Record<Priority, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    filteredGrievances.forEach((g) => {
+      const current = counts[g.priority];
+      if (current !== undefined) {
+        counts[g.priority] = current + 1;
       }
     });
     return Object.entries(counts).map(([name, value]) => ({
@@ -172,12 +210,12 @@ export default function AnalyticsPage() {
       value,
       color: PRIORITY_COLORS[name] || "#64748b",
     }));
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   // Status distribution
   const statusData = useMemo(() => {
     const counts: Record<string, number> = {};
-    grievances.forEach((g) => {
+    filteredGrievances.forEach((g) => {
       const label =
         g.status === "GFM_REVIEW" || g.status === "Submitted"
           ? "Pending GFM"
@@ -193,29 +231,29 @@ export default function AnalyticsPage() {
       counts[label] = (counts[label] || 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   // Monthly trends (Submitted vs Resolved)
   const monthlyTrends = useMemo(() => {
     return MONTHS.map((m) => {
-      const submitted = grievances.filter((g) => monthKey(g.submittedAt) === m).length;
-      const resolved = grievances.filter(
-        (g) => g.status === "Resolved" && monthKey(g.updatedAt) === m
+      const submitted = filteredGrievances.filter((g) => monthKey(g.submittedAt) === m).length;
+      const resolved = filteredGrievances.filter(
+        (g) => g.status === "Resolved" && monthKey(g.updatedAt) === m,
       ).length;
       return { month: m, Submitted: submitted, Resolved: resolved };
     });
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   // Department performance breakdown (excluding GFM-pending cases)
   const deptPerformance = useMemo(() => {
     return DEPARTMENTS.map((deptName) => {
-      const deptCases = grievances.filter(
+      const deptCases = filteredGrievances.filter(
         (g) =>
           g.department === deptName &&
           g.status !== "GFM_REVIEW" &&
           g.status !== "Submitted" &&
           g.status !== "GFM_REJECTED" &&
-          g.status !== "GFM_INFORMATION_REQUESTED"
+          g.status !== "GFM_INFORMATION_REQUESTED",
       );
       const resolved = deptCases.filter((g) => g.status === "Resolved").length;
       const active = deptCases.length - resolved;
@@ -228,7 +266,7 @@ export default function AnalyticsPage() {
         rate,
       };
     }).filter((d) => d.total > 0);
-  }, [grievances]);
+  }, [filteredGrievances]);
 
   return (
     <>
@@ -237,6 +275,77 @@ export default function AnalyticsPage() {
         description="Cross-module metrics calculated from mock data. Tracks GFM first-level review speed, department resolution SLAs, and escalation patterns."
         crumbs={[{ label: "Administration", to: "/admin" }, { label: "Analytics" }]}
       />
+
+      {/* Analytics Scope Filter Toolbar */}
+      <div className="surface-card mb-6 p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <NativeSelect
+            aria-label="Department Scope"
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            options={DEPARTMENTS}
+            allLabel="All departments"
+          />
+
+          <NativeSelect
+            aria-label="Category Scope"
+            value={catFilter}
+            onChange={(e) => setCatFilter(e.target.value)}
+            options={categories}
+            allLabel="All categories"
+          />
+
+          <select
+            className="h-9 rounded-md border border-input bg-background px-3 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Status Scope"
+          >
+            <option value="all">All statuses</option>
+            {GRIEVANCE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABELS[s] ?? s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date Range Sub-Bar */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
+          <span className="font-medium">Analytics Date Range:</span>
+          <Input
+            type="date"
+            className="h-8 w-36 text-xs"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            aria-label="From Date"
+          />
+          <span>to</span>
+          <Input
+            type="date"
+            className="h-8 w-36 text-xs"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            aria-label="To Date"
+          />
+
+          {hasActiveFilters && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground ml-auto sm:ml-0"
+              onClick={resetFilters}
+            >
+              <FilterX className="mr-1 size-3.5" />
+              Reset filters
+            </Button>
+          )}
+
+          <span className="ml-auto text-xs text-muted-foreground font-medium">
+            Analyzing {filteredGrievances.length} of {grievances.length} grievance{grievances.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
 
       {/* Demo Data Notice */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-primary">
@@ -372,7 +481,9 @@ export default function AnalyticsPage() {
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }: { name?: string; percent?: number }) =>
+                    `${name ?? ""} ${(((percent ?? 0) * 100)).toFixed(0)}%`
+                  }
                 >
                   {priorityData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -428,7 +539,9 @@ export default function AnalyticsPage() {
                   cy="50%"
                   innerRadius={50}
                   outerRadius={80}
-                  label={({ name, value }) => `${name}: ${value}`}
+                  label={({ name, value }: { name?: string; value?: number }) =>
+                    `${name ?? ""}: ${value ?? 0}`
+                  }
                 >
                   {statusData.map((_, index) => (
                     <Cell key={`cell-status-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />

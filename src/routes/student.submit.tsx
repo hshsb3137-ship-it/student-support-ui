@@ -189,7 +189,7 @@ function SubmitGrievance() {
               ["Submission date", receipt.date],
               ["Category", receipt.category],
               ["Assigned department", receipt.department],
-              ["Initial status", "Submitted"],
+              ["Initial status", "Pending GFM Review"],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">

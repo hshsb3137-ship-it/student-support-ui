@@ -14,7 +14,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ConfirmationDialog } from "@/components/common/ConfirmationDialog";
 import { Notification } from "@/components/common/Notification";
-import { notifications } from "@/lib/mock-data";
+import {
+  getSharedNotifications,
+  markNotificationReadInSharedStore,
+  subscribeToSharedStore,
+} from "@/lib/shared-grievance-store";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
@@ -31,21 +35,29 @@ function initials(name: string) {
 }
 
 export function AppShell({ role, children }: { role: Role; children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
+  const [allNotifs, setAllNotifs] = useState(getSharedNotifications);
+
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    return subscribeToSharedStore(() => {
+      setAllNotifs([...getSharedNotifications()]);
+    });
+  }, []);
+
   const items = NAV[role];
   const roleNotifications = useMemo(
-    () => notifications.filter((n) => n.audience.includes(role)),
-    [role],
+    () => allNotifs.filter((n) => n.audience.includes(role)),
+    [allNotifs, role],
   );
   const unread = roleNotifications.filter((n) => !n.read).length;
 
@@ -188,7 +200,12 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
               </p>
               <div className="max-h-80 space-y-1 overflow-y-auto">
                 {roleNotifications.map((n) => (
-                  <Notification key={n.id} notification={n} compact />
+                  <Notification
+                    key={n.id}
+                    notification={n}
+                    compact
+                    onClick={() => markNotificationReadInSharedStore(n.id)}
+                  />
                 ))}
               </div>
               <Link
@@ -229,6 +246,46 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate({ to: `/${role}/notifications` })}>
                 Notifications
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Switch Role (Demo)
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                className={cn(role === "student" && "font-semibold text-primary bg-primary/5")}
+                onSelect={() => {
+                  switchRole("student");
+                  navigate({ to: "/student" });
+                }}
+              >
+                🎓 Student
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={cn(role === "gfm" && "font-semibold text-primary bg-primary/5")}
+                onSelect={() => {
+                  switchRole("gfm");
+                  navigate({ to: "/gfm" });
+                }}
+              >
+                📋 GFM (First-Level Review)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={cn(role === "department" && "font-semibold text-primary bg-primary/5")}
+                onSelect={() => {
+                  switchRole("department");
+                  navigate({ to: "/department" });
+                }}
+              >
+                🏛️ Department Staff Desk
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={cn(role === "admin" && "font-semibold text-primary bg-primary/5")}
+                onSelect={() => {
+                  switchRole("admin");
+                  navigate({ to: "/admin" });
+                }}
+              >
+                🛡️ Administrator
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setConfirmLogout(true)}>Log out</DropdownMenuItem>

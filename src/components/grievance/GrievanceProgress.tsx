@@ -4,41 +4,65 @@ import type { GrievanceStatus } from "@/lib/types";
 
 const STEPS = [
   "Submitted",
-  "Under Review",
+  "GFM Review",
   "Department Assigned",
+  "Staff Review",
   "In Progress",
-  "Resolution Proposed",
   "Resolved",
 ] as const;
 
 const NEXT_ACTION: Record<GrievanceStatus, string> = {
-  Submitted: "Waiting for the grievance cell to review your case.",
-  Acknowledged: "The department has acknowledged your case and will begin the review shortly.",
+  SUBMITTED: "Your grievance has been submitted and is awaiting GFM first-level review.",
+  Submitted: "Your grievance has been submitted and is awaiting GFM first-level review.",
+  GFM_REVIEW: "Awaiting first-level review by the Grievance Forwarding Member (GFM).",
+  GFM_ACCEPTED: "Accepted by GFM and assigned to the relevant department.",
+  GFM_INFORMATION_REQUESTED: "GFM requested additional information. Please submit the requested details.",
+  GFM_REJECTED: "Grievance was rejected by GFM. Please inspect the rejection reason.",
+  DEPARTMENT_ASSIGNED: "Forwarded to the department desk. Awaiting department staff review.",
+  STAFF_REVIEW: "Department staff has commenced review on your grievance.",
+  IN_PROGRESS: "The assigned department is actively resolving your grievance.",
+  "In Progress": "The assigned department is actively resolving your grievance.",
+  Acknowledged: "The department has acknowledged your case and will begin review shortly.",
+  "Under Review": "Department staff is investigating and working on the case.",
   "Waiting for Student": "The department needs additional information from you to continue.",
-  "Under Review": "The grievance cell is verifying details before assigning a department.",
-  "In Progress": "The assigned department is working on a resolution.",
+  INFORMATION_REQUESTED: "The department requested additional information from you.",
   "Resolution Proposed": "Review the proposed resolution and share your feedback.",
-  Resolved: "Closed. You can reopen it within 7 days if the issue persists.",
+  RESOLVED: "Grievance has been resolved. You can submit feedback or reopen if needed.",
+  Resolved: "Grievance has been resolved. You can submit feedback or reopen if needed.",
   Rejected: "Closed without action. Reopen with more details if needed.",
-  Escalated: "Escalated to the administration for priority handling.",
+  ESCALATED: "Escalated to senior administration for priority handling.",
+  Escalated: "Escalated to senior administration for priority handling.",
+  ESCALATED_TO_ADMIN: "Escalated to senior administration for high-level review.",
 };
 
 function stepIndex(status: GrievanceStatus) {
   switch (status) {
+    case "SUBMITTED":
     case "Submitted":
       return 0;
-    case "Under Review":
+    case "GFM_REVIEW":
+    case "GFM_INFORMATION_REQUESTED":
+    case "GFM_REJECTED":
       return 1;
-    case "In Progress":
+    case "GFM_ACCEPTED":
+    case "DEPARTMENT_ASSIGNED":
+      return 2;
+    case "STAFF_REVIEW":
+    case "Acknowledged":
+    case "Under Review":
       return 3;
+    case "IN_PROGRESS":
+    case "In Progress":
+    case "Waiting for Student":
+    case "INFORMATION_REQUESTED":
     case "Resolution Proposed":
+    case "ESCALATED":
+    case "Escalated":
+    case "ESCALATED_TO_ADMIN":
       return 4;
+    case "RESOLVED":
     case "Resolved":
       return 5;
-    case "Escalated":
-      return 3;
-    case "Rejected":
-      return 1;
     default:
       return 0;
   }

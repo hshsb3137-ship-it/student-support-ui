@@ -46,9 +46,34 @@ const TONE_DOT = { info: "bg-info", success: "bg-success", warning: "bg-warning"
 
 function DepartmentDashboard() {
   const { cases, staff, activity } = useDepartmentData();
-  const by = (s: string) => cases.filter((g) => g.status === s).length;
-  const inReview = by("Under Review") + by("Acknowledged");
-  const high = cases.filter((g) => g.priority === "High" || g.priority === "Critical").length;
+
+  const assignedCount = cases.length;
+  const pendingReviewCount = cases.filter(
+    (g) =>
+      g.status === "DEPARTMENT_ASSIGNED" ||
+      g.status === "STAFF_REVIEW" ||
+      g.status === "Under Review" ||
+      g.status === "Acknowledged",
+  ).length;
+  const inProgressCount = cases.filter(
+    (g) =>
+      g.status === "In Progress" ||
+      g.status === "IN_PROGRESS" ||
+      g.status === "Waiting for Student" ||
+      g.status === "INFORMATION_REQUESTED" ||
+      g.status === "Resolution Proposed",
+  ).length;
+  const resolvedCount = cases.filter(
+    (g) => g.status === "Resolved" || g.status === "RESOLVED",
+  ).length;
+  const escalatedCount = cases.filter(
+    (g) =>
+      g.status === "Escalated" ||
+      g.status === "ESCALATED" ||
+      g.status === "ESCALATED_TO_ADMIN",
+  ).length;
+
+  const by = (...statuses: string[]) => cases.filter((g) => statuses.includes(g.status)).length;
   const recent = [...cases].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)).slice(0, 6);
 
   return (
@@ -59,14 +84,12 @@ function DepartmentDashboard() {
         actions={<DepartmentScopeBadge />}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        <DashboardCard label="Total assigned" value={cases.length} icon={Inbox} />
-        <DashboardCard label="New" value={by("Submitted")} icon={FilePlus2} tone="info" />
-        <DashboardCard label="Under review" value={inReview} icon={Clock} tone="accent" />
-        <DashboardCard label="In progress" value={by("In Progress")} icon={Loader} tone="warning" />
-        <DashboardCard label="High priority" value={high} icon={AlertTriangle} tone="critical" />
-        <DashboardCard label="Resolved" value={by("Resolved")} icon={CheckCircle2} tone="success" />
-        <DashboardCard label="Escalated" value={by("Escalated")} icon={ShieldAlert} tone="critical" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <DashboardCard label="Assigned" value={assignedCount} icon={Inbox} />
+        <DashboardCard label="Pending Review" value={pendingReviewCount} icon={Clock} tone="warning" />
+        <DashboardCard label="In Progress" value={inProgressCount} icon={Loader} tone="info" />
+        <DashboardCard label="Resolved" value={resolvedCount} icon={CheckCircle2} tone="success" />
+        <DashboardCard label="Escalated" value={escalatedCount} icon={ShieldAlert} tone="critical" />
       </div>
 
       <section className="mt-6">
@@ -89,11 +112,11 @@ function DepartmentDashboard() {
         <Bars
           title="Status overview"
           data={[
-            { label: "New", value: by("Submitted"), cls: "bg-info" },
-            { label: "Under Review", value: inReview, cls: "bg-accent" },
-            { label: "In Progress", value: by("In Progress") + by("Waiting for Student") + by("Resolution Proposed"), cls: "bg-warning" },
-            { label: "Resolved", value: by("Resolved"), cls: "bg-success" },
-            { label: "Escalated", value: by("Escalated"), cls: "bg-critical" },
+            { label: "New", value: by("DEPARTMENT_ASSIGNED", "Submitted", "SUBMITTED"), cls: "bg-info" },
+            { label: "Under Review", value: by("STAFF_REVIEW", "Under Review", "Acknowledged"), cls: "bg-accent" },
+            { label: "In Progress", value: by("In Progress", "IN_PROGRESS", "Waiting for Student", "INFORMATION_REQUESTED", "Resolution Proposed"), cls: "bg-warning" },
+            { label: "Resolved", value: by("Resolved", "RESOLVED"), cls: "bg-success" },
+            { label: "Escalated", value: by("Escalated", "ESCALATED", "ESCALATED_TO_ADMIN"), cls: "bg-critical" },
           ]}
         />
         <section className="surface-card p-5">

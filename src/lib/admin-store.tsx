@@ -1,11 +1,9 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminDepartments,
-  adminEscalations,
   adminNoticeSeed,
   adminPolicies,
   adminUsers,
-  allGrievances,
   type AdminDepartment,
   type AdminEscalation,
   type AdminNotice,
@@ -13,6 +11,13 @@ import {
   type EscalationStatus,
   type Policy,
 } from "./admin-data";
+import {
+  getSharedGrievances,
+  getSharedEscalations,
+  subscribeToSharedStore,
+  updateGrievanceInSharedStore,
+  updateEscalationInSharedStore,
+} from "./shared-grievance-store";
 import type { Grievance, GrievanceStatus } from "./types";
 
 export interface AdminComment {
@@ -66,11 +71,11 @@ interface Ctx {
 const AdminCtx = createContext<Ctx | null>(null);
 
 export function AdminDataProvider({ children }: { children: ReactNode }) {
-  const [grievances, setGrievances] = useState<Grievance[]>(allGrievances);
+  const [grievances, setGrievances] = useState<Grievance[]>(getSharedGrievances);
+  const [escalations, setEscalations] = useState<AdminEscalation[]>(getSharedEscalations);
   const [comments, setComments] = useState<Record<string, AdminComment[]>>({});
   const [users, setUsers] = useState<AdminUser[]>(adminUsers);
   const [departments, setDepartments] = useState<AdminDepartment[]>(adminDepartments);
-  const [escalations, setEscalations] = useState<AdminEscalation[]>(adminEscalations);
   const [policies, setPolicies] = useState<Policy[]>(adminPolicies);
   const [notices, setNotices] = useState<AdminNotice[]>(adminNoticeSeed);
   const [prefs, setPrefs] = useState<AdminPrefs>({
@@ -82,33 +87,36 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     slaWarnings: true,
   });
 
+  useEffect(() => {
+    return subscribeToSharedStore(() => {
+      setGrievances([...getSharedGrievances()]);
+      setEscalations([...getSharedEscalations()]);
+    });
+  }, []);
+
   const value = useMemo<Ctx>(
     () => ({
       grievances,
-      updateGrievance: (id, fn) =>
-        setGrievances((list) => list.map((g) => (g.id === id ? fn(g) : g))),
-      updateGrievanceStatus: (id, status) =>
-        setGrievances((list) =>
-          list.map((g) =>
-            g.id === id
-              ? {
-                  ...g,
-                  status,
-                  updatedAt: today(),
-                  timeline: [
-                    ...g.timeline,
-                    {
-                      id: `t-${Date.now()}`,
-                      label: `Status: ${status}`,
-                      actor: `${ADMIN_NAME} (Admin)`,
-                      note: `Status updated to ${status} by administrator.`,
-                      date: today(),
-                    },
-                  ],
-                }
-              : g,
-          ),
-        ),
+      updateGrievance: (id, fn) => {
+        updateGrievanceInSharedStore(id, fn);
+      },
+      updateGrievanceStatus: (id, status) => {
+        updateGrievanceInSharedStore(id, (g) => ({
+          ...g,
+          status,
+          updatedAt: today(),
+          timeline: [
+            ...g.timeline,
+            {
+              id: `t-${Date.now()}`,
+              label: `Status: ${status}`,
+              actor: `${ADMIN_NAME} (Admin)`,
+              note: `Status updated to ${status} by administrator.`,
+              date: today(),
+            },
+          ],
+        }));
+      },
       comments,
       addGrievanceComment: (id, note) =>
         setComments((c) => ({
@@ -130,61 +138,46 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
           list.map((d) => (d.id === id ? { ...d, status: d.status === "Active" ? "Inactive" : "Active" } : d)),
         ),
       escalations,
-      assignEscalation: (id, officer) =>
-        setEscalations((list) =>
-          list.map((e) =>
-            e.id === id
-              ? {
-                  ...e,
-                  assignedOfficer: officer,
-                  history: [
-                    ...e.history,
-                    {
-                      id: crypto.randomUUID(),
-                      date: today(),
-                      actor: `${ADMIN_NAME} (Admin)`,
-                      note: `Assigned case to ${officer} for high-level administrative review.`,
-                    },
-                  ],
-                }
-              : e,
-          ),
-        ),
-      updateEscalationStatus: (id, status) =>
-        setEscalations((list) =>
-          list.map((e) =>
-            e.id === id
-              ? {
-                  ...e,
-                  status,
-                  history: [
-                    ...e.history,
-                    {
-                      id: crypto.randomUUID(),
-                      date: today(),
-                      actor: `${ADMIN_NAME} (Admin)`,
-                      note: `Status marked as "${status}".`,
-                    },
-                  ],
-                }
-              : e,
-          ),
-        ),
-      addEscalationComment: (id, note, status) =>
-        setEscalations((list) =>
-          list.map((e) =>
-            e.id === id
-              ? {
-                  ...e,
-                  status: status ?? e.status,
-                  history: [
-                    ...e.history,
-                    { id: crypto.randomUUID(), date: today(), actor: `${ADMIN_NAME} (Admin)`, note },
-                  ],
-                }
-              : e,
-          ),
-        ),
+      assignEscalation: (id, officer) => {
+        updateEscalationInSharedStore(id, (e) => ({
+          ...e,
+          assignedOfficer: officer,
+          history: [
+            ...e.history,
+            {
+              id: crypto.randomUUID(),
+              date: today(),
+              actor: `${ADMIN_NAME} (Admin)`,
+              note: `Assigned case to ${officer} for high-level administrative review.`,
+            },
+          ],
+        }));
+      },
+      updateEscalationStatus: (id, status) => {
+        updateEscalationInSharedStore(id, (e) => ({
+          ...e,
+          status,
+          history: [
+            ...e.history,
+            {
+              id: crypto.randomUUID(),
+              date: today(),
+              actor: `${ADMIN_NAME} (Admin)`,
+              note: `Status marked as "${status}".`,
+            },
+          ],
+        }));
+      },
+      addEscalationComment: (id, note, status) => {
+        updateEscalationInSharedStore(id, (e) => ({
+          ...e,
+          status: status ?? e.status,
+          history: [
+            ...e.history,
+            { id: crypto.randomUUID(), date: today(), actor: `${ADMIN_NAME} (Admin)`, note },
+          ],
+        }));
+      },
       policies,
       savePolicy: (p, isNew) =>
         setPolicies((list) => (isNew ? [p, ...list] : list.map((x) => (x.id === p.id ? p : x)))),

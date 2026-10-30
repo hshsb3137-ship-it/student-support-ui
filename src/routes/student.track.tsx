@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Search, SearchX } from "lucide-react";
+import { Clock, Info, Search, SearchX, Send, ShieldX } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -8,6 +9,7 @@ import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { GrievanceProgress } from "@/components/grievance/GrievanceProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useStudentData } from "@/lib/student-store";
 import type { Grievance } from "@/lib/types";
 
@@ -30,15 +32,27 @@ export const Route = createFileRoute("/student/track")({
 });
 
 function TrackGrievance() {
-  const { findById } = useStudentData();
+  const { findById, submitInfo } = useStudentData();
   const [id, setId] = useState("");
   const [result, setResult] = useState<Grievance | null>(null);
   const [searched, setSearched] = useState(false);
+  const [infoText, setInfoText] = useState("");
 
   function search(e: React.FormEvent) {
     e.preventDefault();
     setResult(findById(id) ?? null);
     setSearched(true);
+  }
+
+  function handleInfoSubmit() {
+    if (!result || !infoText.trim()) return;
+    submitInfo(result.id, infoText.trim());
+    toast.success("Requested information submitted", {
+      description: `Grievance ${result.id} returned to review queue.`,
+    });
+    setInfoText("");
+    // Refresh local result
+    setResult(findById(result.id) ?? null);
   }
 
   return (
@@ -77,6 +91,50 @@ function TrackGrievance() {
               <StatusBadge status={result.status} />
             </div>
           </div>
+
+          {result.status === "GFM_REJECTED" && (
+            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive space-y-1">
+              <div className="flex items-center gap-2 font-semibold">
+                <ShieldX className="size-4" />
+                <span>Grievance Rejected by Reviewer</span>
+              </div>
+              <p className="text-foreground">
+                {result.gfmRejectionReason || "This grievance was reviewed and rejected."}
+              </p>
+            </div>
+          )}
+
+          {(result.status === "GFM_INFORMATION_REQUESTED" ||
+            result.status === "INFORMATION_REQUESTED" ||
+            result.status === "Waiting for Student") && (
+            <div className="mt-4 rounded-lg border border-info/30 bg-info/10 p-4 text-xs text-info space-y-3">
+              <div className="flex items-center gap-2 font-semibold">
+                <Info className="size-4" />
+                <span>Information Requested by Reviewer</span>
+              </div>
+              <p className="text-foreground">
+                {result.gfmInfoRequest || "Additional details or documents were requested by the reviewer."}
+              </p>
+              {result.gfmInfoRequestDeadline && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="size-3" /> Response deadline: <strong>{result.gfmInfoRequestDeadline}</strong>
+                </p>
+              )}
+
+              <div className="pt-2 border-t border-info/20 space-y-2">
+                <Textarea
+                  rows={3}
+                  value={infoText}
+                  onChange={(e) => setInfoText(e.target.value)}
+                  placeholder="Type the requested details or response here..."
+                  className="bg-background text-foreground text-xs"
+                />
+                <Button size="sm" disabled={!infoText.trim()} onClick={handleInfoSubmit}>
+                  <Send className="mr-1.5 size-3.5" /> Submit Requested Details
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6">
             <GrievanceProgress status={result.status} />

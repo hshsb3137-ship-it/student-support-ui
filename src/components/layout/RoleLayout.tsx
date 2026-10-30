@@ -5,7 +5,7 @@ import { AppShell } from "./AppShell";
 import type { Role } from "@/lib/types";
 
 export function RoleLayout({ role }: { role: Role }) {
-  const { user, ready } = useAuth();
+  const { user, ready, switchRole } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -13,9 +13,11 @@ export function RoleLayout({ role }: { role: Role }) {
     if (!user) {
       navigate({ to: "/login", replace: true });
     } else if (user.role !== role) {
-      navigate({ to: ROLE_HOME[user.role], replace: true });
+      // In this frontend demo environment, seamlessly adapt the mock session
+      // to the target module route when navigated directly.
+      switchRole(role);
     }
-  }, [ready, user, role, navigate]);
+  }, [ready, user, role, navigate, switchRole]);
 
   if (!ready || !user || user.role !== role) {
     return (

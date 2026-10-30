@@ -44,7 +44,7 @@ export function AdminGrievanceDrawer({
   const docs = g ? grievanceDocuments[g.id] ?? [] : [];
   const student = g ? lookupStudent(g.studentId, g.submittedBy) : null;
   const resolution =
-    g?.status === "Resolved" || g?.status === "RESOLVED"
+    g?.status === "Resolved"
       ? g.timeline[g.timeline.length - 1]
       : undefined;
 

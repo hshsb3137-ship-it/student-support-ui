@@ -122,7 +122,9 @@ export function AdminDashboard() {
         g.department === d.key &&
         g.status !== "GFM_REVIEW" &&
         g.status !== "GFM_REJECTED" &&
-        g.status !== "Submitted",
+        g.status !== "GFM_INFORMATION_REQUESTED" &&
+        g.status !== "Submitted" &&
+        g.status !== "SUBMITTED",
     );
     const resolved = deptCases.filter(
       (g) => g.status === "Resolved" || g.status === "RESOLVED",

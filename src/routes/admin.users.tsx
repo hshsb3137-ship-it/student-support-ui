@@ -70,7 +70,7 @@ function UsersPage() {
           u.email.toLowerCase().includes(t) ||
           u.id.toLowerCase().includes(t) ||
           u.department.toLowerCase().includes(t)) &&
-        (roleFilter === "all" || u.role === roleFilter) &&
+        (roleFilter === "all" || ROLE_NAMES[u.role] === roleFilter || u.role === roleFilter) &&
         (statusFilter === "all" || u.status === statusFilter),
     );
   }, [users, q, roleFilter, statusFilter]);

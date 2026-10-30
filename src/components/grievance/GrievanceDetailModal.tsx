@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sparkles, Star } from "lucide-react";
+import { AlertCircle, Clock, Info, Send, ShieldX, Sparkles, Star } from "lucide-react";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
@@ -16,6 +16,7 @@ interface Props {
   onWithdraw?: ((id: string) => void) | undefined;
   onReopen?: ((id: string, reason: string) => void) | undefined;
   onFeedback?: ((id: string, rating: number, comment: string) => void) | undefined;
+  onSubmitInfo?: ((id: string, info: string) => void) | undefined;
 }
 
 function mockSentiment(priority: Grievance["priority"]) {
@@ -32,21 +33,40 @@ export function GrievanceDetailModal({
   onWithdraw,
   onReopen,
   onFeedback,
+  onSubmitInfo,
 }: Props) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [reopenReason, setReopenReason] = useState("");
   const [showReopen, setShowReopen] = useState(false);
+  const [infoText, setInfoText] = useState("");
+  const [showInfoForm, setShowInfoForm] = useState(false);
 
   useEffect(() => {
     setRating(0);
     setComment("");
     setReopenReason("");
     setShowReopen(false);
+    setInfoText("");
+    setShowInfoForm(false);
   }, [grievance?.id]);
 
-  const closed = grievance ? ["Resolved", "Rejected"].includes(grievance.status) : false;
-  const canWithdraw = grievance ? ["Submitted", "Under Review"].includes(grievance.status) : false;
+  const closed = grievance
+    ? ["Resolved", "RESOLVED", "Rejected", "GFM_REJECTED"].includes(grievance.status)
+    : false;
+  const canWithdraw = grievance
+    ? ["Submitted", "SUBMITTED", "Under Review", "GFM_REVIEW"].includes(grievance.status)
+    : false;
+
+  const isInfoRequested = grievance
+    ? grievance.status === "GFM_INFORMATION_REQUESTED" ||
+      grievance.status === "INFORMATION_REQUESTED" ||
+      grievance.status === "Waiting for Student"
+    : false;
+
+  const isRejected = grievance
+    ? grievance.status === "GFM_REJECTED" || grievance.status === "Rejected"
+    : false;
 
   return (
     <Modal
@@ -69,6 +89,35 @@ export function GrievanceDetailModal({
             <StatusBadge status={grievance.status} />
             <PriorityBadge priority={grievance.priority} />
           </div>
+
+          {isRejected && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive space-y-1">
+              <div className="flex items-center gap-2 font-semibold">
+                <ShieldX className="size-4" />
+                <span>Grievance Rejected</span>
+              </div>
+              <p className="text-foreground">
+                {grievance.gfmRejectionReason || "This grievance was reviewed and rejected."}
+              </p>
+            </div>
+          )}
+
+          {isInfoRequested && (
+            <div className="rounded-lg border border-info/30 bg-info/10 p-3.5 text-xs text-info space-y-2">
+              <div className="flex items-center gap-2 font-semibold">
+                <Info className="size-4" />
+                <span>Information Requested by Reviewer</span>
+              </div>
+              <p className="text-foreground">
+                {grievance.gfmInfoRequest || "Additional details or verification documents are required to proceed with review."}
+              </p>
+              {grievance.gfmInfoRequestDeadline && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="size-3" /> Response requested by: <strong>{grievance.gfmInfoRequestDeadline}</strong>
+                </p>
+              )}
+            </div>
+          )}
 
           <GrievanceProgress status={grievance.status} />
 
@@ -162,6 +211,32 @@ export function GrievanceDetailModal({
 
           {studentActions ? (
             <div className="space-y-4 border-t pt-4">
+              {isInfoRequested && onSubmitInfo ? (
+                <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <h4 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                    <Send className="size-4 text-primary" /> Respond to Information Request
+                  </h4>
+                  <Textarea
+                    rows={3}
+                    value={infoText}
+                    onChange={(e) => setInfoText(e.target.value)}
+                    placeholder="Enter the requested information or clarification here..."
+                    maxLength={1000}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!infoText.trim()}
+                    onClick={() => {
+                      onSubmitInfo(grievance.id, infoText.trim());
+                      setInfoText("");
+                      onClose();
+                    }}
+                  >
+                    Submit Requested Information
+                  </Button>
+                </div>
+              ) : null}
+
               {closed && !grievance.feedback && onFeedback ? (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">Rate this resolution</h4>
